@@ -1,0 +1,3 @@
+generate_svg:
+  name: Generate SVG
+  description: Force regeneration of the WhereSun shadow SVG.

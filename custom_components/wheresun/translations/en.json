@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "WhereSun address",
+        "description": "Enter the address of your house. It will be geocoded automatically.",
+        "data": {
+          "address": "Address"
+        }
+      },
+      "house": {
+        "title": "House layout",
+        "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize.",
+        "data": {
+          "blocks_json": "Layout data"
+        }
+      },
+      "house_reconfigure": {
+        "title": "Edit house layout",
+        "description": "Update the house layout used for the shadow rendering.",
+        "data": {
+          "blocks_json": "Layout data"
+        }
+      }
+    },
+    "error": {
+      "invalid_address": "Address not found. Check the spelling and try again.",
+      "invalid_blocks": "The house layout data is invalid.",
+      "no_blocks": "Add at least one square or rectangle.",
+      "invalid_shape": "Unable to build a valid house outline from the selected blocks."
+    },
+    "abort": {
+      "already_configured": "WhereSun is already configured.",
+      "reconfigure_successful": "House layout updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "WhereSun options",
+        "description": "Adjust colors, update interval and SVG output path.",
+        "data": {
+          "update_interval": "Update interval (minutes)",
+          "output_path": "SVG output path",
+          "primary_color": "House color",
+          "light_color": "Lit side color",
+          "bg_color": "Background color",
+          "sun_color": "Sun color",
+          "moon_color": "Moon color",
+          "sun_radius": "Sun radius",
+          "moon_radius": "Moon radius"
+        }
+      }
+    }
+  },
+  "services": {
+    "generate_svg": {
+      "name": "Generate SVG",
+      "description": "Force regeneration of the WhereSun shadow SVG."
+    }
+  }
+}

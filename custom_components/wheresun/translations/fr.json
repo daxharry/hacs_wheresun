@@ -1,0 +1,62 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Adresse WhereSun",
+        "description": "Saisissez l'adresse de votre maison. Elle sera géocodée automatiquement.",
+        "data": {
+          "address": "Adresse"
+        }
+      },
+      "house": {
+        "title": "Plan de la maison",
+        "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner.",
+        "data": {
+          "blocks_json": "Données du plan"
+        }
+      },
+      "house_reconfigure": {
+        "title": "Modifier le plan",
+        "description": "Mettez à jour le plan utilisé pour le rendu des ombres.",
+        "data": {
+          "blocks_json": "Données du plan"
+        }
+      }
+    },
+    "error": {
+      "invalid_address": "Adresse introuvable. Vérifiez l'orthographe et réessayez.",
+      "invalid_blocks": "Les données du plan sont invalides.",
+      "no_blocks": "Ajoutez au moins un carré ou un rectangle.",
+      "invalid_shape": "Impossible de construire un contour valide à partir des blocs sélectionnés."
+    },
+    "abort": {
+      "already_configured": "WhereSun est déjà configuré.",
+      "reconfigure_successful": "Plan de la maison mis à jour."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options WhereSun",
+        "description": "Ajustez les couleurs, l'intervalle de mise à jour et le chemin du fichier SVG.",
+        "data": {
+          "update_interval": "Intervalle de mise à jour (minutes)",
+          "output_path": "Chemin du fichier SVG",
+          "primary_color": "Couleur de la maison",
+          "light_color": "Couleur du côté éclairé",
+          "bg_color": "Couleur de fond",
+          "sun_color": "Couleur du soleil",
+          "moon_color": "Couleur de la lune",
+          "sun_radius": "Rayon du soleil",
+          "moon_radius": "Rayon de la lune"
+        }
+      }
+    }
+  },
+  "services": {
+    "generate_svg": {
+      "name": "Générer le SVG",
+      "description": "Force la régénération du SVG d'ombre WhereSun."
+    }
+  }
+}
