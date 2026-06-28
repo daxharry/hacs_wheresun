@@ -10,17 +10,11 @@
       },
       "house": {
         "title": "Plan de la maison",
-        "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner.",
-        "data": {
-          "blocks_json": "Données du plan"
-        }
+        "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner."
       },
       "house_reconfigure": {
         "title": "Modifier le plan",
-        "description": "Mettez à jour le plan utilisé pour le rendu des ombres.",
-        "data": {
-          "blocks_json": "Données du plan"
-        }
+        "description": "Mettez à jour le plan utilisé pour le rendu des ombres."
       }
     },
     "error": {

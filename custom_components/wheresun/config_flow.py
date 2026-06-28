@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -18,7 +17,6 @@ from .const import (
     CONF_ADDRESS,
     CONF_BG_COLOR,
     CONF_BLOCKS,
-    CONF_BLOCKS_JSON,
     CONF_HEIGHT,
     CONF_LIGHT_COLOR,
     CONF_MOON_COLOR,
@@ -47,6 +45,8 @@ from .const import (
 )
 from .geocode import geocode_address
 from .geometry import rects_to_polygon
+from .editor_state import get_editor_blocks, seed_editor_blocks, set_active_flow
+from .frontend_setup import async_ensure_frontend
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,13 +67,6 @@ def _default_options() -> dict[str, Any]:
     }
 
 
-def _parse_blocks(raw_value: str) -> list[dict[str, Any]]:
-    blocks = json.loads(raw_value or "[]")
-    if not isinstance(blocks, list):
-        raise ValueError("blocks must be a list")
-    return blocks
-
-
 class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for WhereSun."""
 
@@ -89,6 +82,7 @@ class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Ask for the mandatory address."""
+        await async_ensure_frontend(self.hass)
         await self.async_set_unique_id(UNIQUE_ID)
         self._abort_if_unique_id_configured()
 
@@ -126,37 +120,33 @@ class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_house(self, user_input: dict[str, Any] | None = None):
         """Collect the house layout from the visual editor."""
+        await async_ensure_frontend(self.hass)
         errors: dict[str, str] = {}
         if user_input is not None:
-            try:
-                blocks = _parse_blocks(user_input[CONF_BLOCKS_JSON])
-            except (json.JSONDecodeError, ValueError):
-                errors["base"] = "invalid_blocks"
+            blocks = get_editor_blocks(self.hass, self.flow_id)
+            if not blocks:
+                errors["base"] = "no_blocks"
             else:
-                if not blocks:
-                    errors["base"] = "no_blocks"
+                shape = rects_to_polygon(blocks)
+                if not shape:
+                    errors["base"] = "invalid_shape"
                 else:
-                    shape = rects_to_polygon(blocks)
-                    if not shape:
-                        errors["base"] = "invalid_shape"
-                    else:
-                        return self.async_create_entry(
-                            title=self._address_data.get("display_name", "WhereSun"),
-                            data={
-                                **self._address_data,
-                                CONF_BLOCKS: blocks,
-                                CONF_SHAPE: shape,
-                            },
-                            options=_default_options(),
-                        )
+                    return self.async_create_entry(
+                        title=self._address_data.get("display_name", "WhereSun"),
+                        data={
+                            **self._address_data,
+                            CONF_BLOCKS: blocks,
+                            CONF_SHAPE: shape,
+                        },
+                        options=_default_options(),
+                    )
+
+        set_active_flow(self.hass, self.flow_id)
+        seed_editor_blocks(self.hass, self.flow_id)
 
         return self.async_show_form(
             step_id="house",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_BLOCKS_JSON, default="[]"): str,
-                }
-            ),
+            data_schema=vol.Schema({}),
             errors=errors,
         )
 
@@ -168,39 +158,34 @@ class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ):
         """Update the stored house layout."""
+        await async_ensure_frontend(self.hass)
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
-        default_blocks = json.dumps(entry.data.get(CONF_BLOCKS, []))
 
         if user_input is not None:
-            try:
-                blocks = _parse_blocks(user_input[CONF_BLOCKS_JSON])
-            except (json.JSONDecodeError, ValueError):
-                errors["base"] = "invalid_blocks"
+            blocks = get_editor_blocks(self.hass, self.flow_id)
+            if not blocks:
+                errors["base"] = "no_blocks"
             else:
-                if not blocks:
-                    errors["base"] = "no_blocks"
+                shape = rects_to_polygon(blocks)
+                if not shape:
+                    errors["base"] = "invalid_shape"
                 else:
-                    shape = rects_to_polygon(blocks)
-                    if not shape:
-                        errors["base"] = "invalid_shape"
-                    else:
-                        new_data = {
-                            **dict(entry.data),
-                            CONF_BLOCKS: blocks,
-                            CONF_SHAPE: shape,
-                        }
-                        self.hass.config_entries.async_update_entry(entry, data=new_data)
-                        await self.hass.config_entries.async_reload(entry.entry_id)
-                        return self.async_abort(reason="reconfigure_successful")
+                    new_data = {
+                        **dict(entry.data),
+                        CONF_BLOCKS: blocks,
+                        CONF_SHAPE: shape,
+                    }
+                    self.hass.config_entries.async_update_entry(entry, data=new_data)
+                    await self.hass.config_entries.async_reload(entry.entry_id)
+                    return self.async_abort(reason="reconfigure_successful")
+
+        set_active_flow(self.hass, self.flow_id)
+        seed_editor_blocks(self.hass, self.flow_id, entry.data.get(CONF_BLOCKS))
 
         return self.async_show_form(
             step_id="house_reconfigure",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_BLOCKS_JSON, default=default_blocks): str,
-                }
-            ),
+            data_schema=vol.Schema({}),
             errors=errors,
         )
 

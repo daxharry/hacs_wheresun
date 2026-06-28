@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant, callback
 import voluptuous as vol
 
 from .const import DOMAIN
+from .editor_state import get_editor_blocks
 
 
 @callback
@@ -21,6 +22,7 @@ def async_register_websocket_handlers(hass: HomeAssistant) -> None:
 
     websocket_api.async_register_command(hass, ws_editor_set)
     websocket_api.async_register_command(hass, ws_editor_get)
+    websocket_api.async_register_command(hass, ws_editor_active)
 
 
 @websocket_api.websocket_command(
@@ -46,5 +48,13 @@ async def ws_editor_set(hass: HomeAssistant, connection, msg: dict) -> None:
 @websocket_api.async_response
 async def ws_editor_get(hass: HomeAssistant, connection, msg: dict) -> None:
     """Return temporary editor blocks for a config flow."""
-    blocks = hass.data[DOMAIN]["editor_state"].get(msg["flow_id"], [])
+    blocks = get_editor_blocks(hass, msg["flow_id"])
     connection.send_result(msg["id"], {"blocks": blocks})
+
+
+@websocket_api.websocket_command({"type": f"{DOMAIN}/editor_active"})
+@websocket_api.async_response
+async def ws_editor_active(hass: HomeAssistant, connection, msg: dict) -> None:
+    """Return the active config flow id for the house editor."""
+    flow_id = hass.data.get(DOMAIN, {}).get("active_flow_id")
+    connection.send_result(msg["id"], {"flow_id": flow_id})

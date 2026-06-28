@@ -3,33 +3,29 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 
-from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
-from .const import DOMAIN, PLATFORMS, URL_BASE
+from .const import DOMAIN, PLATFORMS
 from .coordinator import WhereSunCoordinator
+from .frontend_setup import async_ensure_frontend
 from .websocket_api import async_register_websocket_handlers
 
 _LOGGER = logging.getLogger(__name__)
 
-_FRONTEND_REGISTERED = False
-
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the WhereSun domain."""
-    await _async_register_frontend(hass)
+    await async_ensure_frontend(hass)
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up WhereSun from a config entry."""
-    await _async_register_frontend(hass)
+    await async_ensure_frontend(hass)
 
     coordinator = WhereSunCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
@@ -68,18 +64,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload the integration when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
-
-
-async def _async_register_frontend(hass: HomeAssistant) -> None:
-    """Serve the config-flow house editor assets."""
-    global _FRONTEND_REGISTERED
-    if _FRONTEND_REGISTERED:
-        return
-
-    frontend_dir = Path(__file__).parent / "frontend"
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(URL_BASE, str(frontend_dir), cache_headers=False)]
-    )
-    add_extra_js_url(hass, f"{URL_BASE}/wheresun-config-flow.js")
-    _FRONTEND_REGISTERED = True
-    _LOGGER.debug("Registered WhereSun frontend at %s", URL_BASE)

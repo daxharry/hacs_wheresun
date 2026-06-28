@@ -10,17 +10,11 @@
       },
       "house": {
         "title": "House layout",
-        "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize.",
-        "data": {
-          "blocks_json": "Layout data"
-        }
+        "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize."
       },
       "house_reconfigure": {
         "title": "Edit house layout",
-        "description": "Update the house layout used for the shadow rendering.",
-        "data": {
-          "blocks_json": "Layout data"
-        }
+        "description": "Update the house layout used for the shadow rendering."
       }
     },
     "error": {
