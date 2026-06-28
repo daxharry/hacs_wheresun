@@ -1,7 +1,9 @@
 """Constants for the WhereSun integration."""
 
 DOMAIN = "wheresun"
+DOMAIN_META = "wheresun_meta"
 UNIQUE_ID = "wheresun"
+SUBENTRY_HOUSE = "house"
 
 CONF_ADDRESS = "address"
 CONF_BLOCKS = "blocks"

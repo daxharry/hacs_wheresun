@@ -9,6 +9,7 @@ import voluptuous as vol
 from timezonefinder import TimezoneFinder
 
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -41,12 +42,13 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_WIDTH,
     DOMAIN,
+    SUBENTRY_HOUSE,
     UNIQUE_ID,
 )
-from .geocode import geocode_address
-from .geometry import rects_to_polygon
 from .editor_state import get_editor_blocks, seed_editor_blocks, set_active_flow
 from .frontend_setup import async_ensure_frontend
+from .geocode import geocode_address
+from .geometry import rects_to_polygon
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -67,10 +69,84 @@ def _default_options() -> dict[str, Any]:
     }
 
 
+def _house_subentry_payload(
+    blocks: list[dict[str, Any]], shape: list[dict[str, float]]
+) -> dict[str, Any]:
+    return {
+        "subentry_type": SUBENTRY_HOUSE,
+        "title": "House layout",
+        "unique_id": "house",
+        "data": {
+            CONF_BLOCKS: blocks,
+            CONF_SHAPE: shape,
+        },
+    }
+
+
+class HouseSubentryFlowHandler(ConfigSubentryFlow):
+    """Handle house layout subentry add and reconfigure flows."""
+
+    async def _async_show_house_editor(
+        self,
+        user_input: dict[str, Any] | None,
+        blocks: list[dict[str, Any]] | None,
+    ) -> SubentryFlowResult:
+        await async_ensure_frontend(self.hass)
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            saved_blocks = get_editor_blocks(self.hass, self.flow_id)
+            if not saved_blocks:
+                errors["base"] = "no_blocks"
+            else:
+                shape = rects_to_polygon(saved_blocks)
+                if not shape:
+                    errors["base"] = "invalid_shape"
+                else:
+                    house_data = {
+                        CONF_BLOCKS: saved_blocks,
+                        CONF_SHAPE: shape,
+                    }
+                    if self.source == config_entries.SOURCE_RECONFIGURE:
+                        return self.async_update_and_abort(
+                            self._get_entry(),
+                            self._get_reconfigure_subentry(),
+                            data=house_data,
+                        )
+                    return self.async_create_entry(
+                        title="House layout",
+                        data=house_data,
+                    )
+
+        set_active_flow(self.hass, self.flow_id)
+        seed_editor_blocks(self.hass, self.flow_id, blocks, force=True)
+
+        return self.async_show_form(
+            step_id="reconfigure" if self.source == config_entries.SOURCE_RECONFIGURE else "user",
+            data_schema=vol.Schema({}),
+            errors=errors,
+        )
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Add a house layout subentry."""
+        return await self._async_show_house_editor(user_input, None)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Reconfigure the house layout subentry."""
+        subentry = self._get_reconfigure_subentry()
+        return await self._async_show_house_editor(
+            user_input, subentry.data.get(CONF_BLOCKS)
+        )
+
+
 class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for WhereSun."""
 
-    VERSION = 1
+    VERSION = 2
 
     def __init__(self) -> None:
         self._address_data: dict[str, Any] = {}
@@ -79,6 +155,14 @@ class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
         return WhereSunOptionsFlow(config_entry)
+
+    @classmethod
+    @callback
+    def async_get_supported_subentry_types(
+        cls, config_entry: config_entries.ConfigEntry
+    ) -> dict[str, type[ConfigSubentryFlow]]:
+        """Return supported subentry types."""
+        return {SUBENTRY_HOUSE: HouseSubentryFlowHandler}
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         """Ask for the mandatory address."""
@@ -133,16 +217,13 @@ class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     return self.async_create_entry(
                         title=self._address_data.get("display_name", "WhereSun"),
-                        data={
-                            **self._address_data,
-                            CONF_BLOCKS: blocks,
-                            CONF_SHAPE: shape,
-                        },
+                        data=self._address_data,
                         options=_default_options(),
+                        subentries=[_house_subentry_payload(blocks, shape)],
                     )
 
         set_active_flow(self.hass, self.flow_id)
-        seed_editor_blocks(self.hass, self.flow_id)
+        seed_editor_blocks(self.hass, self.flow_id, force=True)
 
         return self.async_show_form(
             step_id="house",
@@ -151,41 +232,47 @@ class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
-        """Allow reopening the house editor from the integration page."""
-        return await self.async_step_house_reconfigure(user_input)
-
-    async def async_step_house_reconfigure(
-        self, user_input: dict[str, Any] | None = None
-    ):
-        """Update the stored house layout."""
+        """Reconfigure the address of the installation."""
         await async_ensure_frontend(self.hass)
         entry = self._get_reconfigure_entry()
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            blocks = get_editor_blocks(self.hass, self.flow_id)
-            if not blocks:
-                errors["base"] = "no_blocks"
+            session = async_get_clientsession(self.hass)
+            result = await geocode_address(session, user_input[CONF_ADDRESS])
+            if result is None:
+                errors["base"] = "invalid_address"
             else:
-                shape = rects_to_polygon(blocks)
-                if not shape:
-                    errors["base"] = "invalid_shape"
-                else:
-                    new_data = {
-                        **dict(entry.data),
-                        CONF_BLOCKS: blocks,
-                        CONF_SHAPE: shape,
-                    }
-                    self.hass.config_entries.async_update_entry(entry, data=new_data)
-                    await self.hass.config_entries.async_reload(entry.entry_id)
-                    return self.async_abort(reason="reconfigure_successful")
+                timezone = await self.hass.async_add_executor_job(
+                    _lookup_timezone, result["latitude"], result["longitude"]
+                )
+                if timezone is None:
+                    timezone = str(self.hass.config.time_zone)
 
-        set_active_flow(self.hass, self.flow_id)
-        seed_editor_blocks(self.hass, self.flow_id, entry.data.get(CONF_BLOCKS))
+                data_updates = {
+                    **result,
+                    CONF_TIMEZONE: timezone,
+                    "elevation": entry.data.get(
+                        "elevation", self.hass.config.elevation or 0
+                    ),
+                }
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates=data_updates,
+                    title=result.get("display_name", entry.title),
+                )
 
         return self.async_show_form(
-            step_id="house_reconfigure",
-            data_schema=vol.Schema({}),
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_ADDRESS, default=entry.data.get(CONF_ADDRESS, "")
+                    ): selector.TextSelector(
+                        selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
+                    ),
+                }
+            ),
             errors=errors,
         )
 

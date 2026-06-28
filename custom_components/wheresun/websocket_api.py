@@ -6,19 +6,19 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 import voluptuous as vol
 
-from .const import DOMAIN
+from .const import DOMAIN_META
 from .editor_state import get_editor_blocks
 
 
 @callback
 def async_register_websocket_handlers(hass: HomeAssistant) -> None:
     """Register websocket commands used by the frontend editor."""
-    if hass.data.get(DOMAIN, {}).get("ws_registered"):
+    meta = hass.data.setdefault(DOMAIN_META, {})
+    if meta.get("ws_registered"):
         return
 
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN].setdefault("editor_state", {})
-    hass.data[DOMAIN]["ws_registered"] = True
+    meta.setdefault("editor_state", {})
+    meta["ws_registered"] = True
 
     websocket_api.async_register_command(hass, ws_editor_set)
     websocket_api.async_register_command(hass, ws_editor_get)
@@ -27,7 +27,7 @@ def async_register_websocket_handlers(hass: HomeAssistant) -> None:
 
 @websocket_api.websocket_command(
     {
-        "type": f"{DOMAIN}/editor_set",
+        "type": "wheresun/editor_set",
         vol.Required("flow_id"): str,
         vol.Required("blocks"): list,
     }
@@ -35,13 +35,15 @@ def async_register_websocket_handlers(hass: HomeAssistant) -> None:
 @websocket_api.async_response
 async def ws_editor_set(hass: HomeAssistant, connection, msg: dict) -> None:
     """Store temporary editor blocks for a config flow."""
-    hass.data[DOMAIN]["editor_state"][msg["flow_id"]] = msg["blocks"]
+    hass.data.setdefault(DOMAIN_META, {}).setdefault("editor_state", {})[
+        msg["flow_id"]
+    ] = msg["blocks"]
     connection.send_result(msg["id"])
 
 
 @websocket_api.websocket_command(
     {
-        "type": f"{DOMAIN}/editor_get",
+        "type": "wheresun/editor_get",
         vol.Required("flow_id"): str,
     }
 )
@@ -52,9 +54,9 @@ async def ws_editor_get(hass: HomeAssistant, connection, msg: dict) -> None:
     connection.send_result(msg["id"], {"blocks": blocks})
 
 
-@websocket_api.websocket_command({"type": f"{DOMAIN}/editor_active"})
+@websocket_api.websocket_command({"type": "wheresun/editor_active"})
 @websocket_api.async_response
 async def ws_editor_active(hass: HomeAssistant, connection, msg: dict) -> None:
     """Return the active config flow id for the house editor."""
-    flow_id = hass.data.get(DOMAIN, {}).get("active_flow_id")
+    flow_id = hass.data.get(DOMAIN_META, {}).get("active_flow_id")
     connection.send_result(msg["id"], {"flow_id": flow_id})

@@ -315,16 +315,18 @@ if (window.__wheresunConfigFlowInit) {
       text.includes("house layout") ||
       text.includes("plan de la maison") ||
       text.includes("edit house layout") ||
-      text.includes("modifier le plan")
+      text.includes("modifier le plan") ||
+      text.includes("build your house") ||
+      text.includes("construisez votre maison")
     );
   }
 
   function getFlowId(dialog) {
-    const configFlow = dialog.querySelector("config-flow");
-    if (configFlow) {
-      if (configFlow.flowId) return configFlow.flowId;
-      if (configFlow._flowId) return configFlow._flowId;
-      if (configFlow.flow && configFlow.flow.flow_id) return configFlow.flow.flow_id;
+    const flowEl = dialog.querySelector("config-flow, config-subentry-flow");
+    if (flowEl) {
+      if (flowEl.flowId) return flowEl.flowId;
+      if (flowEl._flowId) return flowEl._flowId;
+      if (flowEl.flow && flowEl.flow.flow_id) return flowEl.flow.flow_id;
     }
     return null;
   }
@@ -368,9 +370,9 @@ if (window.__wheresunConfigFlowInit) {
 
   function findMountPoint(dialog) {
     return (
-      dialog.querySelector("config-flow .content") ||
+      dialog.querySelector("config-flow .content, config-subentry-flow .content") ||
       dialog.querySelector(".content") ||
-      dialog.querySelector("config-flow") ||
+      dialog.querySelector("config-flow, config-subentry-flow") ||
       dialog
     );
   }

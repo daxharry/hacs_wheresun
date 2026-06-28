@@ -12,9 +12,12 @@
         "title": "Plan de la maison",
         "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner."
       },
-      "house_reconfigure": {
-        "title": "Modifier le plan",
-        "description": "Mettez à jour le plan utilisé pour le rendu des ombres."
+      "reconfigure": {
+        "title": "Modifier l'adresse",
+        "description": "Changez l'adresse utilisée pour les calculs solaires et lunaires.",
+        "data": {
+          "address": "Adresse"
+        }
       }
     },
     "error": {
@@ -25,7 +28,26 @@
     },
     "abort": {
       "already_configured": "WhereSun est déjà configuré.",
-      "reconfigure_successful": "Plan de la maison mis à jour."
+      "reconfigure_successful": "Configuration mise à jour avec succès."
+    }
+  },
+  "config_subentries": {
+    "house": {
+      "title": "Plan de la maison",
+      "step": {
+        "user": {
+          "title": "Plan de la maison",
+          "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner."
+        },
+        "reconfigure": {
+          "title": "Modifier le plan",
+          "description": "Mettez à jour le plan utilisé pour le rendu des ombres."
+        }
+      },
+      "error": {
+        "no_blocks": "Ajoutez au moins un carré ou un rectangle.",
+        "invalid_shape": "Impossible de construire un contour valide à partir des blocs sélectionnés."
+      }
     }
   },
   "options": {

@@ -12,9 +12,12 @@
         "title": "House layout",
         "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize."
       },
-      "house_reconfigure": {
-        "title": "Edit house layout",
-        "description": "Update the house layout used for the shadow rendering."
+      "reconfigure": {
+        "title": "Update address",
+        "description": "Change the address used for sun and moon calculations.",
+        "data": {
+          "address": "Address"
+        }
       }
     },
     "error": {
@@ -25,7 +28,26 @@
     },
     "abort": {
       "already_configured": "WhereSun is already configured.",
-      "reconfigure_successful": "House layout updated."
+      "reconfigure_successful": "Configuration updated successfully."
+    }
+  },
+  "config_subentries": {
+    "house": {
+      "title": "House layout",
+      "step": {
+        "user": {
+          "title": "House layout",
+          "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize."
+        },
+        "reconfigure": {
+          "title": "Edit house layout",
+          "description": "Update the house layout used for the shadow rendering."
+        }
+      },
+      "error": {
+        "no_blocks": "Add at least one square or rectangle.",
+        "invalid_shape": "Unable to build a valid house outline from the selected blocks."
+      }
     }
   },
   "options": {

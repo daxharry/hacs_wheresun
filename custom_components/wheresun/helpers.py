@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_BG_COLOR,
+    CONF_BLOCKS,
     CONF_HEIGHT,
     CONF_LIGHT_COLOR,
     CONF_MOON_COLOR,
@@ -28,8 +31,22 @@ from .const import (
     DEFAULT_SUN_COLOR,
     DEFAULT_SUN_RADIUS,
     DEFAULT_WIDTH,
+    SUBENTRY_HOUSE,
 )
+from .editor_state import DEFAULT_BLOCKS
 from .shadow_core import Shadow, ShadowConfig, VisualConfig
+
+
+def get_house_data(entry: ConfigEntry) -> dict[str, Any]:
+    """Return house blocks and shape from subentry or legacy entry data."""
+    for subentry in entry.subentries.values():
+        if subentry.subentry_type == SUBENTRY_HOUSE:
+            return dict(subentry.data)
+
+    return {
+        CONF_BLOCKS: entry.data.get(CONF_BLOCKS, DEFAULT_BLOCKS),
+        CONF_SHAPE: entry.data.get(CONF_SHAPE, []),
+    }
 
 
 def build_shadow_config(hass: HomeAssistant, entry: ConfigEntry) -> ShadowConfig:
@@ -51,6 +68,7 @@ def build_shadow_config(hass: HomeAssistant, entry: ConfigEntry) -> ShadowConfig
 def build_visual_config(entry: ConfigEntry) -> VisualConfig:
     """Create visual configuration for the shadow engine."""
     options = entry.options
+    house_data = get_house_data(entry)
     return VisualConfig(
         width=int(options.get(CONF_WIDTH, DEFAULT_WIDTH)),
         height=int(options.get(CONF_HEIGHT, DEFAULT_HEIGHT)),
@@ -61,7 +79,7 @@ def build_visual_config(entry: ConfigEntry) -> VisualConfig:
         moon_color=options.get(CONF_MOON_COLOR, DEFAULT_MOON_COLOR),
         sun_radius=float(options.get(CONF_SUN_RADIUS, DEFAULT_SUN_RADIUS)),
         moon_radius=float(options.get(CONF_MOON_RADIUS, DEFAULT_MOON_RADIUS)),
-        shape=list(entry.data.get(CONF_SHAPE, [])),
+        shape=list(house_data.get(CONF_SHAPE, [])),
     )
 
 
