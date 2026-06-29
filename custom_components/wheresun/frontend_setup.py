@@ -14,6 +14,28 @@ from .websocket_api import async_register_websocket_handlers
 
 _LOGGER = logging.getLogger(__name__)
 
+JS_VERSION = "0.2.1"
+
+
+async def _register_lovelace_resource(hass: HomeAssistant, url: str) -> None:
+    """Best-effort registration of the editor script as a Lovelace resource."""
+    lovelace = hass.data.get("lovelace")
+    if not lovelace or getattr(lovelace, "mode", None) != "storage":
+        return
+    resources = getattr(lovelace, "resources", None)
+    if resources is None:
+        return
+    try:
+        existing = await resources.async_get_info()
+    except Exception:  # noqa: BLE001
+        return
+    if any(item.get("url", "").startswith(url.rsplit("?", 1)[0]) for item in existing):
+        return
+    try:
+        await resources.async_create_item({"res_type": "js", "url": url})
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("WhereSun lovelace resource not registered: %s", err)
+
 
 async def async_ensure_frontend(hass: HomeAssistant) -> None:
     """Register frontend assets as early as possible (including during config flow)."""
@@ -27,7 +49,12 @@ async def async_ensure_frontend(hass: HomeAssistant) -> None:
             )
         except RuntimeError:
             _LOGGER.debug("WhereSun static path already registered")
-        add_extra_js_url(hass, f"{URL_BASE}/wheresun-config-flow.js?v=0.2.0")
+
+        loader_url = f"{URL_BASE}/wheresun-loader.js?v={JS_VERSION}"
+        main_url = f"{URL_BASE}/wheresun-config-flow.js?v={JS_VERSION}"
+        add_extra_js_url(hass, loader_url)
+        add_extra_js_url(hass, main_url)
+        await _register_lovelace_resource(hass, main_url)
         meta["frontend_registered"] = True
         _LOGGER.debug("WhereSun frontend registered at %s", URL_BASE)
 

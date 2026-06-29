@@ -304,36 +304,57 @@ if (window.__wheresunConfigFlowInit) {
     customElements.define("wheresun-house-editor", WhereSunHouseEditor);
   }
 
-  function getHass() {
-    const root = document.querySelector("home-assistant");
-    return root && root.hass ? root.hass : null;
+  function walkRoots(root, visit) {
+    if (!root) return;
+    visit(root);
+    const elements = root.querySelectorAll ? root.querySelectorAll("*") : [];
+    elements.forEach((element) => {
+      visit(element);
+      if (element.shadowRoot) {
+        walkRoots(element.shadowRoot, visit);
+      }
+    });
   }
 
-  function isHouseStep(dialog) {
-    const text = (dialog.textContent || "").toLowerCase();
+  function getHass() {
+    if (window.hass) return window.hass;
+    const root = document.querySelector("home-assistant");
+    if (root && root.hass) return root.hass;
+    let found = null;
+    walkRoots(document, (node) => {
+      if (!found && node.hass) found = node.hass;
+    });
+    return found;
+  }
+
+  function isHouseStep(root) {
+    const text = (root.textContent || "").toLowerCase();
     return (
       text.includes("house layout") ||
       text.includes("plan de la maison") ||
       text.includes("edit house layout") ||
       text.includes("modifier le plan") ||
       text.includes("build your house") ||
-      text.includes("construisez votre maison")
+      text.includes("construisez votre maison") ||
+      text.includes("shadow rendering") ||
+      text.includes("rendu des ombres")
     );
   }
 
-  function getFlowId(dialog) {
-    const flowEl = dialog.querySelector("config-flow, config-subentry-flow");
-    if (flowEl) {
-      if (flowEl.flowId) return flowEl.flowId;
-      if (flowEl._flowId) return flowEl._flowId;
-      if (flowEl.flow && flowEl.flow.flow_id) return flowEl.flow.flow_id;
-    }
-    return null;
+  function findFlowIdDeep(root) {
+    let found = null;
+    walkRoots(root, (node) => {
+      if (found) return;
+      if (node.flowId) found = node.flowId;
+      else if (node._flowId) found = node._flowId;
+      else if (node.flow && node.flow.flow_id) found = node.flow.flow_id;
+    });
+    return found;
   }
 
-  async function resolveFlowId(hass, dialog) {
-    let flowId = getFlowId(dialog);
-    if (flowId) return flowId;
+  async function resolveFlowId(hass, root) {
+    const fromDom = findFlowIdDeep(root);
+    if (fromDom) return fromDom;
     try {
       const result = await hass.callWS({ type: "wheresun/editor_active" });
       return result.flow_id;
@@ -368,27 +389,85 @@ if (window.__wheresunConfigFlowInit) {
     }
   }
 
-  function findMountPoint(dialog) {
-    return (
-      dialog.querySelector("config-flow .content, config-subentry-flow .content") ||
-      dialog.querySelector(".content") ||
-      dialog.querySelector("config-flow, config-subentry-flow") ||
-      dialog
-    );
+  function hasEditorMounted(root) {
+    let found = false;
+    walkRoots(root, (node) => {
+      if (found) return;
+      if (
+        node.localName === "wheresun-house-editor" ||
+        node.classList?.contains("wheresun-editor-mount")
+      ) {
+        found = true;
+      }
+    });
+    return found;
   }
 
-  function hookSubmit(dialog, hass, flowId, editor) {
-    const buttons = dialog.querySelectorAll(
-      'mwc-button, ha-button, button[slot="primaryAction"], [data-dialog="confirm"]'
-    );
-    buttons.forEach((button) => {
-      if (button.__wheresunSubmitHooked) return;
-      const label = (button.textContent || "").toLowerCase();
+  function findMountPoint(root) {
+    let subentryFlow = null;
+    walkRoots(root, (node) => {
+      if (node.localName === "config-subentry-flow") {
+        subentryFlow = node;
+      }
+    });
+    if (subentryFlow?.shadowRoot) {
+      const shadow = subentryFlow.shadowRoot;
+      const content =
+        shadow.querySelector(".content") ||
+        shadow.querySelector("form") ||
+        shadow.querySelector("div.config-flow") ||
+        shadow.querySelector("div");
+      if (content) return content;
+      return shadow;
+    }
+
+    let configFlow = null;
+    walkRoots(root, (node) => {
+      if (node.localName === "config-flow") {
+        configFlow = node;
+      }
+    });
+    if (configFlow?.shadowRoot) {
+      const shadow = configFlow.shadowRoot;
+      const content =
+        shadow.querySelector(".content") ||
+        shadow.querySelector("form") ||
+        shadow.querySelector("div.config-flow") ||
+        shadow.querySelector("div");
+      if (content) return content;
+      return shadow;
+    }
+
+    let dialog = null;
+    walkRoots(root, (node) => {
+      if (node.localName === "ha-md-dialog" || node.localName === "ha-dialog") {
+        dialog = node;
+      }
+    });
+    if (dialog) {
+      const slotContent = dialog.querySelector("config-subentry-flow, config-flow");
+      if (slotContent) return findMountPoint(slotContent);
+      if (dialog.shadowRoot) {
+        const content = dialog.shadowRoot.querySelector(".content, article, div");
+        if (content) return content;
+      }
+    }
+
+    return root;
+  }
+
+  function hookSubmit(root, hass, flowId, editor) {
+    walkRoots(root, (node) => {
+      if (!node.tagName) return;
+      const tag = node.tagName.toLowerCase();
+      if (tag !== "mwc-button" && tag !== "ha-button" && tag !== "button") return;
+      if (node.__wheresunSubmitHooked) return;
+      const label = (node.textContent || "").toLowerCase();
       if (!label.includes("submit") && !label.includes("valider") && !label.includes("envoyer")) {
         return;
       }
-      button.__wheresunSubmitHooked = true;
-      button.addEventListener(
+      node.__wheresunSubmitHooked = true;
+      node.addEventListener(
         "click",
         () => {
           saveBlocks(hass, flowId, editor.getBlocks());
@@ -398,17 +477,27 @@ if (window.__wheresunConfigFlowInit) {
     });
   }
 
-  async function mountEditor(dialog) {
-    if (!isHouseStep(dialog)) return;
-    if (dialog.querySelector("wheresun-house-editor")) return;
+  async function mountEditor(root) {
+    if (!isHouseStep(root)) return;
+    if (hasEditorMounted(root)) return;
 
     const hass = getHass();
-    if (!hass) return;
+    if (!hass) {
+      console.debug("WhereSun: hass not ready yet");
+      return;
+    }
 
-    const flowId = await resolveFlowId(hass, dialog);
-    if (!flowId) return;
+    let flowId = await resolveFlowId(hass, root);
+    for (let attempt = 0; !flowId && attempt < 10; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      flowId = await resolveFlowId(hass, root);
+    }
+    if (!flowId) {
+      console.warn("WhereSun: no flow id for house editor");
+      return;
+    }
 
-    const mountPoint = findMountPoint(dialog);
+    const mountPoint = findMountPoint(root);
     const editor = document.createElement("wheresun-house-editor");
     editor.onChange = (blocks) => saveBlocks(hass, flowId, blocks);
 
@@ -416,18 +505,30 @@ if (window.__wheresunConfigFlowInit) {
     wrapper.className = "wheresun-editor-mount";
     wrapper.style.margin = "16px 0";
     wrapper.appendChild(editor);
-    mountPoint.prepend(wrapper);
+
+    if (mountPoint.appendChild) {
+      mountPoint.insertBefore(wrapper, mountPoint.firstChild);
+    } else if (root.appendChild) {
+      root.appendChild(wrapper);
+    }
 
     const blocks = await loadBlocks(hass, flowId);
-    editor.setBlocks(blocks);
+    editor.setBlocks(blocks.length ? blocks : undefined);
     await saveBlocks(hass, flowId, editor.getBlocks());
-    hookSubmit(dialog, hass, flowId, editor);
+    hookSubmit(root, hass, flowId, editor);
   }
 
   function scanDialogs() {
-    document.querySelectorAll("ha-dialog, div[role='dialog']").forEach((dialog) => {
-      if (!isHouseStep(dialog)) return;
-      mountEditor(dialog).catch((error) => {
+    const roots = new Set();
+    document.querySelectorAll("ha-dialog, ha-md-dialog, div[role='dialog']").forEach((node) => {
+      roots.add(node);
+    });
+    if (!roots.size) {
+      roots.add(document.body);
+    }
+    roots.forEach((root) => {
+      if (!isHouseStep(root)) return;
+      mountEditor(root).catch((error) => {
         console.warn("WhereSun editor mount failed", error);
       });
     });
@@ -436,5 +537,5 @@ if (window.__wheresunConfigFlowInit) {
   const observer = new MutationObserver(() => scanDialogs());
   observer.observe(document.body, { childList: true, subtree: true });
   scanDialogs();
-  setInterval(scanDialogs, 500);
+  setInterval(scanDialogs, 400);
 }
