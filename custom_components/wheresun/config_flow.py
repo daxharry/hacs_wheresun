@@ -48,7 +48,7 @@ from .const import (
     URL_BASE,
 )
 from .editor_state import get_editor_blocks, seed_editor_blocks, set_active_flow
-from .frontend_setup import async_ensure_frontend
+from .frontend_setup import PANEL_PATH, async_ensure_frontend
 from .geocode import geocode_address
 from .geometry import rects_to_polygon
 
@@ -86,10 +86,11 @@ def _house_subentry_payload(
 
 
 def _editor_placeholders(hass: HomeAssistant, flow_id: str) -> dict[str, str]:
-    """Placeholders for config flow descriptions (hash avoids HA markdown ? parsing)."""
+    """Placeholders for config flow descriptions."""
     base = get_url(hass).rstrip("/")
     return {
-        "editor_url": f"{base}{URL_BASE}/editor.html#flow_id={flow_id}",
+        "editor_url": f"{base}{URL_BASE}/editor.html?flow_id={flow_id}",
+        "panel_url": f"{base}/{PANEL_PATH}",
     }
 
 

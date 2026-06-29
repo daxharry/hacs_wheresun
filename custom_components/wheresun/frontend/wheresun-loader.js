@@ -1,25 +1,16 @@
-(function () {
-  if (window.__wheresunLoaderInit) return;
-  window.__wheresunLoaderInit = true;
+const VERSION = "0.2.4";
 
-  const VERSION = "0.2.3";
-  const SCRIPTS = ["/wheresun/wheresun-inject.js"];
+function loadInject() {
+  if (window.__wheresunInjectInit) return;
+  const base = "/wheresun/wheresun-inject.js";
+  if (document.querySelector(`script[data-wheresun-inject="1"]`)) return;
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = `${base}?v=${VERSION}`;
+  script.dataset.wheresunInject = "1";
+  document.head.appendChild(script);
+}
 
-  function loadScript(path) {
-    const base = path.split("?")[0];
-    if (document.querySelector(`script[data-wheresun-src="${base}"]`)) return;
-    const script = document.createElement("script");
-    script.src = `${path}?v=${VERSION}`;
-    script.dataset.wheresunSrc = base;
-    script.async = false;
-    document.head.appendChild(script);
-  }
-
-  function bootstrap() {
-    SCRIPTS.forEach((path) => loadScript(path));
-  }
-
-  bootstrap();
-  document.addEventListener("DOMContentLoaded", bootstrap);
-  setInterval(bootstrap, 1500);
-})();
+loadInject();
+document.addEventListener("DOMContentLoaded", loadInject);
+setInterval(loadInject, 2000);

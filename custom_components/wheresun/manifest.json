@@ -1,7 +1,7 @@
 {
   "domain": "wheresun",
   "name": "WhereSun",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "documentation": "https://github.com/daxharry/hacs_wheresun",
   "issue_tracker": "https://github.com/daxharry/hacs_wheresun/issues",
   "dependencies": ["http", "frontend"],
