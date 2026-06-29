@@ -10,9 +10,10 @@ from timezonefinder import TimezoneFinder
 
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigSubentryFlow, SubentryFlowResult
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import selector
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.network import get_url
 
 from .const import (
     CONF_ADDRESS,
@@ -44,6 +45,7 @@ from .const import (
     DOMAIN,
     SUBENTRY_HOUSE,
     UNIQUE_ID,
+    URL_BASE,
 )
 from .editor_state import get_editor_blocks, seed_editor_blocks, set_active_flow
 from .frontend_setup import async_ensure_frontend
@@ -83,8 +85,12 @@ def _house_subentry_payload(
     }
 
 
-def _editor_placeholders(flow_id: str) -> dict[str, str]:
-    return {"editor_url": f"/wheresun/editor.html?flow_id={flow_id}"}
+def _editor_placeholders(hass: HomeAssistant, flow_id: str) -> dict[str, str]:
+    """Placeholders for config flow descriptions (hash avoids HA markdown ? parsing)."""
+    base = get_url(hass).rstrip("/")
+    return {
+        "editor_url": f"{base}{URL_BASE}/editor.html#flow_id={flow_id}",
+    }
 
 
 class HouseSubentryFlowHandler(ConfigSubentryFlow):
@@ -128,7 +134,7 @@ class HouseSubentryFlowHandler(ConfigSubentryFlow):
         return self.async_show_form(
             step_id="reconfigure" if self.source == config_entries.SOURCE_RECONFIGURE else "user",
             data_schema=vol.Schema({}),
-            description_placeholders=_editor_placeholders(self.flow_id),
+            description_placeholders=_editor_placeholders(self.hass, self.flow_id),
             errors=errors,
         )
 
@@ -233,7 +239,7 @@ class WhereSunConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="house",
             data_schema=vol.Schema({}),
-            description_placeholders=_editor_placeholders(self.flow_id),
+            description_placeholders=_editor_placeholders(self.hass, self.flow_id),
             errors=errors,
         )
 

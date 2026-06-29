@@ -10,7 +10,7 @@
       },
       "house": {
         "title": "Plan de la maison",
-        "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner.\n\nSi l'éditeur n'apparaît pas ci-dessous, [ouvrez l'éditeur visuel]({editor_url})."
+        "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner.\n\nSi l'éditeur n'apparaît pas ci-dessous, cliquez sur le bouton **Ouvrir l'éditeur visuel**."
       },
       "reconfigure": {
         "title": "Modifier l'adresse",
@@ -37,11 +37,11 @@
       "step": {
         "user": {
           "title": "Plan de la maison",
-          "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner.\n\nSi l'éditeur n'apparaît pas ci-dessous, [ouvrez l'éditeur visuel]({editor_url})."
+          "description": "Construisez votre maison avec des carrés et des rectangles. Glissez pour déplacer, utilisez les poignées pour redimensionner.\n\nSi l'éditeur n'apparaît pas ci-dessous, cliquez sur le bouton **Ouvrir l'éditeur visuel**."
         },
         "reconfigure": {
           "title": "Modifier le plan",
-          "description": "Mettez à jour le plan utilisé pour le rendu des ombres.\n\nSi l'éditeur n'apparaît pas ci-dessous, [ouvrez l'éditeur visuel]({editor_url})."
+          "description": "Mettez à jour le plan utilisé pour le rendu des ombres.\n\nSi l'éditeur n'apparaît pas ci-dessous, cliquez sur le bouton **Ouvrir l'éditeur visuel**."
         }
       },
       "error": {

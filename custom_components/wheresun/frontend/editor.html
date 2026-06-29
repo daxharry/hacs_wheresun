@@ -73,9 +73,15 @@
 
   <script>
     (function () {
-      const VERSION = "0.2.2";
+      const VERSION = "0.2.3";
       const params = new URLSearchParams(window.location.search);
       let flowId = params.get("flow_id");
+      if (!flowId && window.location.hash) {
+        const hash = window.location.hash.replace(/^#/, "");
+        if (hash.startsWith("flow_id=")) {
+          flowId = decodeURIComponent(hash.slice("flow_id=".length));
+        }
+      }
       let hass = null;
       let blocks = [];
       let selectedId = null;
@@ -115,12 +121,102 @@
       }
 
       async function waitForHass() {
-        for (let i = 0; i < 50; i += 1) {
-          hass = resolveHass();
-          if (hass) return hass;
-          await new Promise((resolve) => setTimeout(resolve, 100));
+        const existing = resolveHass();
+        if (existing) return existing;
+        return createWebSocketHass();
+      }
+
+      function getStoredTokens() {
+        try {
+          const raw = localStorage.getItem("hassTokens");
+          return raw ? JSON.parse(raw) : null;
+        } catch (err) {
+          return null;
         }
-        throw new Error("Home Assistant connection not available");
+      }
+
+      function getClientId(tokens) {
+        if (tokens && tokens.clientId) return tokens.clientId;
+        return `${location.protocol}//${location.host}/`;
+      }
+
+      async function getAccessToken() {
+        const tokens = getStoredTokens();
+        if (!tokens || !tokens.access_token) {
+          throw new Error("Not logged in to Home Assistant");
+        }
+        if (tokens.expires && tokens.expires > Date.now() + 60000) {
+          return tokens.access_token;
+        }
+        if (!tokens.refresh_token) {
+          throw new Error("Session expired, reload Home Assistant");
+        }
+        const resp = await fetch("/auth/token", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "refresh_token",
+            client_id: getClientId(tokens),
+            refresh_token: tokens.refresh_token,
+          }),
+        });
+        if (!resp.ok) {
+          throw new Error("Authentication failed");
+        }
+        const data = await resp.json();
+        const updated = {
+          ...tokens,
+          access_token: data.access_token,
+          expires_in: data.expires_in,
+          expires: Date.now() + data.expires_in * 1000,
+        };
+        localStorage.setItem("hassTokens", JSON.stringify(updated));
+        return updated.access_token;
+      }
+
+      function createWebSocketHass() {
+        return new Promise((resolve, reject) => {
+          getAccessToken()
+            .then((accessToken) => {
+              const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+              const ws = new WebSocket(`${protocol}//${location.host}/api/websocket`);
+              let msgId = 1;
+              const pending = new Map();
+
+              ws.addEventListener("message", (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === "auth_required") {
+                  ws.send(JSON.stringify({ type: "auth", access_token: accessToken }));
+                  return;
+                }
+                if (msg.type === "auth_invalid") {
+                  reject(new Error("Invalid authentication"));
+                  return;
+                }
+                if (msg.type === "auth_ok") {
+                  resolve({
+                    callWS: (data) =>
+                      new Promise((res, rej) => {
+                        const id = msgId++;
+                        pending.set(id, { res, rej });
+                        ws.send(JSON.stringify({ ...data, id }));
+                      }),
+                  });
+                  return;
+                }
+                if (msg.type === "result" && pending.has(msg.id)) {
+                  const handlers = pending.get(msg.id);
+                  pending.delete(msg.id);
+                  if (msg.success) handlers.res(msg.result);
+                  else handlers.rej(msg.error || new Error("WebSocket command failed"));
+                }
+              });
+
+              ws.addEventListener("error", () => reject(new Error("WebSocket error")));
+            })
+            .catch(reject);
+        });
       }
 
       async function resolveFlowId() {
@@ -373,7 +469,7 @@
       async function init() {
         setStatus("Connecting…");
         try {
-          await waitForHass();
+          hass = await waitForHass();
           const loaded = await loadBlocks();
           setBlocks(loaded.length ? loaded : defaultBlocks());
           await saveBlocks();

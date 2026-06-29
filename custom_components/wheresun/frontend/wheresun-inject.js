@@ -2,8 +2,12 @@
   if (window.__wheresunInjectInit) return;
   window.__wheresunInjectInit = true;
 
-  const VERSION = "0.2.2";
+  const VERSION = "0.2.3";
   const EDITOR_PATH = "/wheresun/editor.html";
+
+  function editorUrl(flowId) {
+    return `${EDITOR_PATH}?flow_id=${encodeURIComponent(flowId)}&v=${VERSION}`;
+  }
 
   function walkTree(root, visit) {
     if (!root) return;
@@ -173,9 +177,60 @@
     });
   }
 
-  async function mountEditor(root) {
+  function hasOpenButton(root) {
+    let found = false;
+    walkTree(root, (node) => {
+      if (found) return;
+      if (node.dataset && node.dataset.wheresunOpenBtn) found = true;
+    });
+    return found;
+  }
+
+  function fixBrokenLinks(root, flowId) {
+    const url = editorUrl(flowId);
+    walkTree(root, (node) => {
+      if (!node.tagName || node.tagName.toLowerCase() !== "a") return;
+      const href = node.getAttribute("href") || "";
+      if (!href.includes("flow_id") && !href.includes("wheresun")) return;
+      if (href.includes("wheresun/editor.html")) return;
+      node.setAttribute("href", url);
+      node.setAttribute("target", "_blank");
+      node.setAttribute("rel", "noopener");
+      node.addEventListener(
+        "click",
+        (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          window.open(url, "_blank", "noopener");
+        },
+        true
+      );
+    });
+  }
+
+  function addOpenEditorButton(mount, flowId) {
+    if (!mount.parent || hasOpenButton(mount.parent)) return;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.dataset.wheresunOpenBtn = "1";
+    button.textContent =
+      (document.documentElement.lang || navigator.language || "").toLowerCase().startsWith("fr")
+        ? "Ouvrir l'éditeur visuel"
+        : "Open visual editor";
+    button.style.cssText =
+      "margin: 10px 0 4px; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--primary-color, #03a9f4); background: transparent; color: var(--primary-color, #03a9f4); cursor: pointer; font: inherit;";
+    button.addEventListener("click", () => {
+      window.open(editorUrl(flowId), "_blank", "noopener");
+    });
+    if (mount.after) {
+      mount.after.insertAdjacentElement("afterend", button);
+    } else {
+      mount.parent.insertBefore(button, mount.parent.firstChild);
+    }
+  }
+
+  async function enhanceHouseStep(root) {
     if (!isHouseStep(root)) return;
-    if (hasIframe(root)) return;
 
     const hass = getHass();
     if (!hass) return;
@@ -185,12 +240,30 @@
       await new Promise((resolve) => setTimeout(resolve, 200));
       flowId = await resolveFlowId(hass, root);
     }
-    if (!flowId) {
-      console.warn("WhereSun: unable to resolve config flow id");
-      return;
-    }
+    if (!flowId) return;
 
     const mount = findMountPoint(root);
+    fixBrokenLinks(root, flowId);
+    addOpenEditorButton(mount, flowId);
+    await mountEditor(root, flowId, mount);
+  }
+
+  async function mountEditor(root, flowId, mount) {
+    if (!isHouseStep(root)) return;
+    if (hasIframe(root)) return;
+
+    const hass = getHass();
+    if (!hass) return;
+
+    if (!flowId) {
+      flowId = await resolveFlowId(hass, root);
+      if (!flowId) {
+        console.warn("WhereSun: unable to resolve config flow id");
+        return;
+      }
+    }
+
+    if (!mount) mount = findMountPoint(root);
     if (!mount.parent) return;
 
     const wrapper = document.createElement("div");
@@ -201,7 +274,7 @@
     const iframe = document.createElement("iframe");
     iframe.dataset.wheresunEditor = "1";
     iframe.title = "WhereSun house editor";
-    iframe.src = `${EDITOR_PATH}?flow_id=${encodeURIComponent(flowId)}&v=${VERSION}`;
+    iframe.src = editorUrl(flowId);
     iframe.style.cssText =
       "width: 100%; height: 420px; border: 1px solid var(--divider-color, #444); border-radius: 12px; background: #111;";
     iframe.setAttribute("loading", "eager");
@@ -245,8 +318,7 @@
 
   function scan() {
     collectRoots().forEach((root) => {
-      if (!isHouseStep(root)) return;
-      mountEditor(root).catch((err) => console.warn("WhereSun mount failed", err));
+      enhanceHouseStep(root).catch((err) => console.warn("WhereSun enhance failed", err));
     });
   }
 

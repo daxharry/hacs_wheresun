@@ -14,7 +14,7 @@ from .websocket_api import async_register_websocket_handlers
 
 _LOGGER = logging.getLogger(__name__)
 
-JS_VERSION = "0.2.2"
+JS_VERSION = "0.2.3"
 
 
 async def _register_lovelace_resource(hass: HomeAssistant, url: str) -> None:

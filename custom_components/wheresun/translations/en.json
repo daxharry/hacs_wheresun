@@ -10,7 +10,7 @@
       },
       "house": {
         "title": "House layout",
-        "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize.\n\nIf the editor does not appear below, [open the visual editor]({editor_url})."
+        "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize.\n\nIf the editor does not appear below, click the **Open visual editor** button."
       },
       "reconfigure": {
         "title": "Update address",
@@ -37,11 +37,11 @@
       "step": {
         "user": {
           "title": "House layout",
-          "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize.\n\nIf the editor does not appear below, [open the visual editor]({editor_url})."
+          "description": "Build your house with squares and rectangles. Drag to move, use corner handles to resize.\n\nIf the editor does not appear below, click the **Open visual editor** button."
         },
         "reconfigure": {
           "title": "Edit house layout",
-          "description": "Update the house layout used for the shadow rendering.\n\nIf the editor does not appear below, [open the visual editor]({editor_url})."
+          "description": "Update the house layout used for the shadow rendering.\n\nIf the editor does not appear below, click the **Open visual editor** button."
         }
       },
       "error": {

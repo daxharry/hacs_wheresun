@@ -2,7 +2,7 @@
   if (window.__wheresunLoaderInit) return;
   window.__wheresunLoaderInit = true;
 
-  const VERSION = "0.2.2";
+  const VERSION = "0.2.3";
   const SCRIPTS = ["/wheresun/wheresun-inject.js"];
 
   function loadScript(path) {
