@@ -2,17 +2,24 @@
   if (window.__wheresunLoaderInit) return;
   window.__wheresunLoaderInit = true;
 
-  function loadMain() {
-    if (window.__wheresunConfigFlowInit) return;
-    if (document.querySelector("script[data-wheresun-main]")) return;
+  const VERSION = "0.2.2";
+  const SCRIPTS = ["/wheresun/wheresun-inject.js"];
+
+  function loadScript(path) {
+    const base = path.split("?")[0];
+    if (document.querySelector(`script[data-wheresun-src="${base}"]`)) return;
     const script = document.createElement("script");
-    script.src = "/wheresun/wheresun-config-flow.js?v=0.2.1";
-    script.dataset.wheresunMain = "1";
-    script.async = true;
+    script.src = `${path}?v=${VERSION}`;
+    script.dataset.wheresunSrc = base;
+    script.async = false;
     document.head.appendChild(script);
   }
 
-  loadMain();
-  document.addEventListener("DOMContentLoaded", loadMain);
-  setInterval(loadMain, 2000);
+  function bootstrap() {
+    SCRIPTS.forEach((path) => loadScript(path));
+  }
+
+  bootstrap();
+  document.addEventListener("DOMContentLoaded", bootstrap);
+  setInterval(bootstrap, 1500);
 })();

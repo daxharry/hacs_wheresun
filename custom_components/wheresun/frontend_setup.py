@@ -14,7 +14,7 @@ from .websocket_api import async_register_websocket_handlers
 
 _LOGGER = logging.getLogger(__name__)
 
-JS_VERSION = "0.2.1"
+JS_VERSION = "0.2.2"
 
 
 async def _register_lovelace_resource(hass: HomeAssistant, url: str) -> None:
@@ -51,10 +51,11 @@ async def async_ensure_frontend(hass: HomeAssistant) -> None:
             _LOGGER.debug("WhereSun static path already registered")
 
         loader_url = f"{URL_BASE}/wheresun-loader.js?v={JS_VERSION}"
-        main_url = f"{URL_BASE}/wheresun-config-flow.js?v={JS_VERSION}"
-        add_extra_js_url(hass, loader_url)
-        add_extra_js_url(hass, main_url)
-        await _register_lovelace_resource(hass, main_url)
+        inject_url = f"{URL_BASE}/wheresun-inject.js?v={JS_VERSION}"
+        # Classic scripts (not ES modules) so they run on every page load.
+        add_extra_js_url(hass, loader_url, es5=True)
+        add_extra_js_url(hass, inject_url, es5=True)
+        await _register_lovelace_resource(hass, inject_url)
         meta["frontend_registered"] = True
         _LOGGER.debug("WhereSun frontend registered at %s", URL_BASE)
 

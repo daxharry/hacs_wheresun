@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WhereSun house editor</title>
+  <style>
+    :root {
+      color-scheme: dark light;
+      font-family: var(--ha-font-family, system-ui, sans-serif);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 12px;
+      background: var(--primary-background-color, #111);
+      color: var(--primary-text-color, #eee);
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: 1px solid var(--divider-color, #555);
+      background: var(--card-background-color, #222);
+      color: var(--primary-text-color, #eee);
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font: inherit;
+    }
+    button:hover { filter: brightness(1.1); }
+    .canvas-wrap {
+      border: 1px solid var(--divider-color, #555);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #1a1919;
+      max-width: 100%;
+    }
+    svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      touch-action: none;
+      min-height: 280px;
+    }
+    .hint {
+      margin-top: 8px;
+      color: var(--secondary-text-color, #aaa);
+      font-size: 12px;
+    }
+    .status {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--secondary-text-color, #888);
+    }
+    .status.error { color: #f44336; }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button type="button" id="add-square">Square</button>
+    <button type="button" id="add-rect">Rectangle</button>
+    <button type="button" id="delete">Delete</button>
+  </div>
+  <div class="canvas-wrap">
+    <svg id="canvas" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div class="hint">Click to select, drag to move, pull corners to resize.</div>
+  <div class="status" id="status"></div>
+
+  <script>
+    (function () {
+      const VERSION = "0.2.2";
+      const params = new URLSearchParams(window.location.search);
+      let flowId = params.get("flow_id");
+      let hass = null;
+      let blocks = [];
+      let selectedId = null;
+      let dragMode = null;
+      let dragStart = null;
+      let nextId = 1;
+      let saveTimer = null;
+
+      const svg = document.getElementById("canvas");
+      const statusEl = document.getElementById("status");
+
+      function setStatus(text, isError) {
+        statusEl.textContent = text || "";
+        statusEl.classList.toggle("error", Boolean(isError));
+      }
+
+      function getHassFromWindow(win) {
+        try {
+          if (!win) return null;
+          if (win.hass) return win.hass;
+          const ha = win.document && win.document.querySelector("home-assistant");
+          if (ha && ha.hass) return ha.hass;
+          const hc = win.document && win.document.querySelector("hc-main");
+          if (hc && hc.hass) return hc.hass;
+        } catch (err) {
+          return null;
+        }
+        return null;
+      }
+
+      function resolveHass() {
+        return (
+          getHassFromWindow(window) ||
+          getHassFromWindow(window.parent) ||
+          getHassFromWindow(window.top)
+        );
+      }
+
+      async function waitForHass() {
+        for (let i = 0; i < 50; i += 1) {
+          hass = resolveHass();
+          if (hass) return hass;
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        throw new Error("Home Assistant connection not available");
+      }
+
+      async function resolveFlowId() {
+        if (flowId) return flowId;
+        const result = await hass.callWS({ type: "wheresun/editor_active" });
+        flowId = result.flow_id;
+        if (!flowId) throw new Error("No active config flow");
+        return flowId;
+      }
+
+      async function loadBlocks() {
+        const id = await resolveFlowId();
+        const result = await hass.callWS({
+          type: "wheresun/editor_get",
+          flow_id: id,
+        });
+        return result.blocks || [];
+      }
+
+      async function saveBlocks() {
+        const id = await resolveFlowId();
+        await hass.callWS({
+          type: "wheresun/editor_set",
+          flow_id: id,
+          blocks: getBlocks(),
+        });
+        setStatus("Saved");
+      }
+
+      function scheduleSave() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          saveBlocks().catch((err) => setStatus(err.message, true));
+        }, 250);
+      }
+
+      function getBlocks() {
+        return blocks.map(({ id, x, y, width, height }) => ({
+          id,
+          x: Math.round(x * 100) / 100,
+          y: Math.round(y * 100) / 100,
+          width: Math.round(width * 100) / 100,
+          height: Math.round(height * 100) / 100,
+        }));
+      }
+
+      function defaultBlocks() {
+        return [{ id: "r1", x: 35, y: 40, width: 30, height: 25 }];
+      }
+
+      function setBlocks(newBlocks) {
+        blocks = (newBlocks || []).map((block) => ({ ...block }));
+        if (!blocks.length) blocks = defaultBlocks();
+        nextId =
+          Math.max(
+            0,
+            ...blocks.map((block) => Number(String(block.id).replace(/\D/g, "")) || 0)
+          ) + 1;
+        selectedId = null;
+        redraw();
+        scheduleSave();
+      }
+
+      function getSelected() {
+        return blocks.find((block) => block.id === selectedId) || null;
+      }
+
+      function svgPoint(event) {
+        const rect = svg.getBoundingClientRect();
+        const x = ((event.clientX - rect.left) / rect.width) * 100;
+        const y = ((event.clientY - rect.top) / rect.height) * 100;
+        return {
+          x: Math.max(0, Math.min(100, x)),
+          y: Math.max(0, Math.min(100, y)),
+        };
+      }
+
+      function hitTest(point) {
+        for (let i = blocks.length - 1; i >= 0; i -= 1) {
+          const block = blocks[i];
+          if (
+            point.x >= block.x &&
+            point.x <= block.x + block.width &&
+            point.y >= block.y &&
+            point.y <= block.y + block.height
+          ) {
+            return block.id;
+          }
+        }
+        return null;
+      }
+
+      function resizeHandle(point, block) {
+        const handle = 3;
+        const corners = [
+          ["nw", block.x, block.y],
+          ["ne", block.x + block.width, block.y],
+          ["sw", block.x, block.y + block.height],
+          ["se", block.x + block.width, block.y + block.height],
+        ];
+        for (const [name, x, y] of corners) {
+          if (Math.abs(point.x - x) <= handle && Math.abs(point.y - y) <= handle) {
+            return name;
+          }
+        }
+        return null;
+      }
+
+      function clampBlock(block) {
+        block.width = Math.max(5, Math.min(100, block.width));
+        block.height = Math.max(5, Math.min(100, block.height));
+        block.x = Math.max(0, Math.min(100 - block.width, block.x));
+        block.y = Math.max(0, Math.min(100 - block.height, block.y));
+      }
+
+      function redraw() {
+        const parts = [
+          '<rect width="100" height="100" fill="#1a1919" />',
+          '<circle cx="50" cy="50" r="49" fill="none" stroke="#444" stroke-width="0.5" />',
+        ];
+        for (const block of blocks) {
+          const selected = block.id === selectedId;
+          parts.push(
+            `<rect x="${block.x}" y="${block.y}" width="${block.width}" height="${block.height}" ` +
+              `fill="${selected ? "#26bf75" : "#1b3024"}" stroke="${selected ? "#ffff66" : "#355f49"}" stroke-width="0.8" />`
+          );
+          if (selected) {
+            const corners = [
+              [block.x, block.y],
+              [block.x + block.width, block.y],
+              [block.x, block.y + block.height],
+              [block.x + block.width, block.y + block.height],
+            ];
+            for (const [x, y] of corners) {
+              parts.push(
+                `<rect x="${x - 1.2}" y="${y - 1.2}" width="2.4" height="2.4" fill="#ffff66" />`
+              );
+            }
+          }
+        }
+        svg.innerHTML = parts.join("");
+      }
+
+      function onPointerDown(event) {
+        const point = svgPoint(event);
+        const selected = getSelected();
+        if (selected) {
+          const handle = resizeHandle(point, selected);
+          if (handle) {
+            dragMode = `resize-${handle}`;
+            dragStart = { block: { ...selected } };
+            return;
+          }
+        }
+        const hit = hitTest(point);
+        selectedId = hit;
+        if (hit) {
+          const block = getSelected();
+          dragMode = "move";
+          dragStart = {
+            offsetX: point.x - block.x,
+            offsetY: point.y - block.y,
+          };
+        } else {
+          dragMode = null;
+        }
+        redraw();
+      }
+
+      function onPointerMove(event) {
+        if (!dragMode || !dragStart) return;
+        const point = svgPoint(event);
+        const block = getSelected();
+        if (!block) return;
+        if (dragMode === "move") {
+          block.x = point.x - dragStart.offsetX;
+          block.y = point.y - dragStart.offsetY;
+        } else {
+          const origin = dragStart.block;
+          if (dragMode === "resize-se") {
+            block.width = point.x - origin.x;
+            block.height = point.y - origin.y;
+          } else if (dragMode === "resize-sw") {
+            block.x = point.x;
+            block.width = origin.x + origin.width - point.x;
+            block.height = point.y - origin.y;
+          } else if (dragMode === "resize-ne") {
+            block.y = point.y;
+            block.width = point.x - origin.x;
+            block.height = origin.y + origin.height - point.y;
+          } else if (dragMode === "resize-nw") {
+            block.x = point.x;
+            block.y = point.y;
+            block.width = origin.x + origin.width - point.x;
+            block.height = origin.y + origin.height - point.y;
+          }
+        }
+        clampBlock(block);
+        redraw();
+        scheduleSave();
+      }
+
+      function onPointerUp() {
+        dragMode = null;
+        dragStart = null;
+      }
+
+      document.getElementById("add-square").addEventListener("click", () => {
+        const block = { id: `r${nextId++}`, x: 40, y: 40, width: 20, height: 20 };
+        blocks.push(block);
+        selectedId = block.id;
+        redraw();
+        scheduleSave();
+      });
+
+      document.getElementById("add-rect").addEventListener("click", () => {
+        const block = { id: `r${nextId++}`, x: 30, y: 45, width: 35, height: 18 };
+        blocks.push(block);
+        selectedId = block.id;
+        redraw();
+        scheduleSave();
+      });
+
+      document.getElementById("delete").addEventListener("click", () => {
+        if (!selectedId) return;
+        blocks = blocks.filter((block) => block.id !== selectedId);
+        selectedId = null;
+        redraw();
+        scheduleSave();
+      });
+
+      svg.addEventListener("pointerdown", onPointerDown);
+      svg.addEventListener("pointermove", onPointerMove);
+      svg.addEventListener("pointerup", onPointerUp);
+      svg.addEventListener("pointerleave", onPointerUp);
+
+      window.addEventListener("message", (event) => {
+        if (event.data && event.data.type === "wheresun-save") {
+          clearTimeout(saveTimer);
+          saveBlocks()
+            .then(() => {
+              if (event.source) {
+                event.source.postMessage({ type: "wheresun-saved" }, "*");
+              }
+            })
+            .catch(() => {});
+        }
+      });
+
+      async function init() {
+        setStatus("Connecting…");
+        try {
+          await waitForHass();
+          const loaded = await loadBlocks();
+          setBlocks(loaded.length ? loaded : defaultBlocks());
+          await saveBlocks();
+          setStatus("");
+        } catch (err) {
+          setStatus(err.message || String(err), true);
+        }
+      }
+
+      init();
+    })();
+  </script>
+</body>
+</html>
